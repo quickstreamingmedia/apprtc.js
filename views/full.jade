@@ -1,0 +1,36 @@
+extends layout
+
+append vars
+  - var title = 'AppRTC: Room full'
+  - var description = 'AppRTC: Room full'
+  - var details = 'AppRTC: Room full'
+
+append head
+  style.
+    body {
+      font-family: "Open Sans";
+      font-weight: 100;
+      padding: 25% 0 0 0;
+    }
+    button {
+      display: block;
+      font-size: 1.5em;
+      font-family: sans-serif;
+      margin: 0 auto;
+      padding: .5em .5em .3em .5em;
+      width: 12em;
+    }
+    div {
+      color: white;
+      font-size: 2em;
+      margin: 0 0 2em 0;
+      text-align: center;
+    }
+
+block content
+  div Sorry, this room is full.
+  button OPEN A NEW ROOM
+  script.
+    document.querySelector("button").onclick = function() {
+      location.href = location.origin;
+    };
