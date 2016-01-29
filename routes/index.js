@@ -1,43 +1,48 @@
 "use strict";
 
+var express = require('express');
 var util = require('util');
 var querystring = require('querystring');
 var https = require('https');
 var http = require('http');
-var express = require('express');
-var router = express.Router();
+var debug = require('debug')('apprtc.js:/index.js');
+
 var Rooms = require('../lib/rooms.js');
+
+var router = express.Router();
 var rooms = new Rooms();
 
 var constants = {
   LOOPBACK_CLIENT_ID: 'LOOPBACK_CLIENT_ID',
+
   TURN_BASE_URL: 'https://computeengineondemand.appspot.com',
   TURN_URL_TEMPLATE: '%s/turn?username=%s&key=%s',
   CEOD_KEY: '4080218913',
+
   WSS_HOST_ACTIVE_HOST_KEY: 'wss_host_active_host', //memcache key for the active collider host.
   WSS_HOST_PORT_PAIRS: ['apprtc-ws.webrtc.org:443', 'apprtc-ws-2.webrtc.org:443'],
+
   RESPONSE_ERROR: 'ERROR',
+  RESPONSE_ROOM_FULL: 'FULL',
   RESPONSE_UNKNOWN_ROOM: 'UNKNOWN_ROOM',
   RESPONSE_UNKNOWN_CLIENT: 'UNKNOWN_CLIENT',
-  RESPONSE_ROOM_FULL: 'FULL',
   RESPONSE_DUPLICATE_CLIENT: 'DUPLICATE_CLIENT',
   RESPONSE_SUCCESS: 'SUCCESS',
-  RESPONSE_INVALID_REQUEST: 'INVALID_REQUEST'
-
+  RESPONSE_INVALID_REQUEST: 'INVALID_REQUEST',
 };
 
 
 function generateRandom(length) {
   var word = '';
   for (var i = 0; i < length; i++) {
-    word += Math.floor((Math.random() * 10));
+    word += (Math.random() * 10 | 0);
   }
   return word;
 }
 
 // HD is on by default for desktop Chrome, but not Android or Firefox (yet)
 function getHDDefault(userAgent) {
-  if (userAgent.indexOf('Android') > -1 || userAgent.indexOf('Chrome') == -1) {
+  if (userAgent.indexOf('Android') !== -1 || userAgent.indexOf('Chrome') === -1) {
     return false;
   }
   return true;
@@ -45,72 +50,50 @@ function getHDDefault(userAgent) {
 
 // iceServers will be filled in by the TURN HTTP request.
 function makePCConfig(iceTransports) {
-  var config = { iceServers: [] };
+  var config = {
+    iceServers: [],
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+  };
   if (iceTransports) {
     config.iceTransports = iceTransports;
   }
   return config;
 }
 
-function maybeAddConstraint(constraints, param, constraint) {
-  var object = {};
-  if (param && param.toLowerCase() == 'true') {
-    object[constraint] = true;
-    constraints['optional'].push(object);
-  } else if (param && param.toLowerCase() == 'false') {
-    object[constraint] = false;
-    constraints['optional'].push(object);
-  }
-  return constraints;
-}
-
-function makePCConstraints(dtls, dscp, ipv6) {
-  var constraints = { optional: [] };
-  maybeAddConstraint(constraints, dtls, 'DtlsSrtpKeyAgreement');
-  maybeAddConstraint(constraints, dscp, 'googDscp');
-  maybeAddConstraint(constraints, ipv6, 'googIPv6');
-  return constraints;
-}
-
 function addMediaTrackConstraint(trackConstraints, constraintString) {
   var tokens = constraintString.split(':');
   var mandatory = true;
-  if (tokens.length == 2) {
+  if (tokens.length === 2) {
     // If specified, e.g. mandatory:minHeight=720, set mandatory appropriately.
-    mandatory = (tokens[0] == 'mandatory');
-  } else if (tokens.length >= 1) {
+    mandatory = (tokens[0] === 'mandatory');
+  } else {
     // Otherwise, default to mandatory, except for goog constraints, which
     // won't work in other browsers.
-    mandatory = !tokens[0].indexOf('goog') == 0;
+    mandatory = !(tokens[0].indexOf('goog') === 0);
   }
 
-  if (tokens.length > 0) {
-    tokens = tokens[tokens.length-1].split('=');
-    if (tokens.length == 2) {
-      if (mandatory) {
-        trackConstraints.mandatory[tokens[0]] = tokens[1];
-      } else {
-        var object = {};
-        object[tokens[0]] = tokens[1];
-        trackConstraints.optional.push(object);
-      }
+  tokens = tokens[tokens.length-1].split('=');
+  if (tokens.length == 2) {
+    if (mandatory) {
+      trackConstraints.mandatory[tokens[0]] = tokens[1];
     } else {
-      console.error('Ignoring malformed constraint: ' + constraintString);
+      trackConstraints.optional.push({[tokens[0]]: tokens[1]});
     }
+  } else {
+    console.error('Ignoring malformed constraint: ' + constraintString);
   }
 }
 
 function makeMediaTrackConstraints(constraintsString) {
   var trackConstraints;
-  if (!constraintsString || constraintsString.toLowerCase() == 'true') {
+  if (!constraintsString || constraintsString.toLowerCase() === 'true') {
     trackConstraints = true;
-  } else if (constraintsString.toLowerCase() == 'false') {
+  } else if (constraintsString.toLowerCase() === 'false') {
     trackConstraints = false;
   } else {
     trackConstraints = { mandatory: {}, optional: [] };
-    var constraintsArray = constraintsString.split(',');
-    for (var i in constraintsArray) {
-      var constraintString = constraintsArray[i];
+    for (var constraintString of constraintsString.split(',')) {
       addMediaTrackConstraint(trackConstraints, constraintString);
     }
   }
@@ -123,7 +106,25 @@ function makeMediaStreamConstraints(audio, video, firefoxFakeDevice) {
     video: makeMediaTrackConstraints(video)
   };
   if (firefoxFakeDevice) streamConstraints.fake = true;
+  console.log('Applying media constraints: %j', streamConstraints);
   return streamConstraints;
+}
+
+function maybeAddConstraint(constraints, param, constraint) {
+  if (param && param.toLowerCase() === 'true') {
+    constraints['optional'].push({[constraint]: true});
+  } else if (param && param.toLowerCase() === 'false') {
+    constraints['optional'].push({[constraint]: false});
+  }
+  return constraints;
+}
+
+function makePCConstraints(dtls, dscp, ipv6) {
+  var constraints = { optional: [] };
+  maybeAddConstraint(constraints, dtls, 'DtlsSrtpKeyAgreement');
+  maybeAddConstraint(constraints, dscp, 'googDscp');
+  maybeAddConstraint(constraints, ipv6, 'googIPv6');
+  return constraints;
 }
 
 function getWSSParameters(req) {
@@ -145,7 +146,7 @@ function getWSSParameters(req) {
     //}
   }
 
-  if (wssTLS && wssTLS == 'false') {
+  if (wssTLS && wssTLS === 'false') {
     return {
       wssUrl: 'ws://' + wssHostPortPair + '/ws',
       wssPostUrl: 'http://' + wssHostPortPair,
@@ -167,6 +168,7 @@ function getVersionInfo() {
 
 function getRoomParameters(req, roomId, clientId, isInitiator) {
   var errorMessages = [];
+  var warningMessages = [];
   var userAgent = req.headers['user-agent'];
   //Which ICE candidates to allow. This is useful for forcing a call to run over TURN, by setting it=relay.
   var iceTransports = req.query['it'];
@@ -223,7 +225,7 @@ function getRoomParameters(req, roomId, clientId, isInitiator) {
   if (hd && video) {
     var message = 'The "hd" parameter has overridden video=' + video
     console.error(message);
-    errorMessages.push(message);
+    warningMessages.push(message);
   }
   if (hd == 'true') {
     video = 'mandatory:minWidth=1280,mandatory:minHeight=720';
@@ -234,7 +236,7 @@ function getRoomParameters(req, roomId, clientId, isInitiator) {
   if (req.query['minre'] || req.query['maxre']) {
     var message = 'The "minre" and "maxre" parameters are no longer supported. Use "video" instead.';
     console.error(message);
-    errorMessages.push(message);
+    warningMessages.push(message);
   }
 
   // Options for controlling various networking features.
@@ -270,6 +272,7 @@ function getRoomParameters(req, roomId, clientId, isInitiator) {
 
   var params = {
     'error_messages': errorMessages,
+    'warning_messages': warningMessages,
     'is_loopback' : JSON.stringify(debug == 'loopback'),
     'pc_config': JSON.stringify(pcConfig),
     'pc_constraints': JSON.stringify(pcConstraints),
@@ -285,7 +288,8 @@ function getRoomParameters(req, roomId, clientId, isInitiator) {
   };
 
   var protocol = req.headers['x-forwarded-proto'];
-  if (!protocol) protocol = "http";
+  if (!protocol) protocol = req.protocol;
+
   if (roomId) {
     params['room_id'] = roomId;
     params['room_link'] =  protocol + "://" + req.headers.host + '/r/' + roomId + '?' + querystring.stringify(req.query);
@@ -301,11 +305,12 @@ function getRoomParameters(req, roomId, clientId, isInitiator) {
 }
 
 function getCacheKeyForRoom(host, roomId) {
-  return host + "/" + roomId;
+  return host + '/' + roomId;
 }
 
 function addClientToRoom(req, roomId, clientId, isLoopback, callback) {
   var key = getCacheKeyForRoom(req.headers.host, roomId);
+
   rooms.createIfNotExist(key, function(error, room) {
     if (error) {
       callback(error);
@@ -363,13 +368,14 @@ function saveMessageFromClient(host, roomId, clientId, message, callback) {
 router.get('/', function(req, res, next) {
   // Parse out parameters from request.
   var params = getRoomParameters(req, null, null, null);
-  res.render("index", params);
+  res.render('index', params);
 });
 
 router.post('/join/:roomId', function(req, res, next) {
   var roomId = req.params.roomId;
   var clientId = generateRandom(8);
-  var isLoopback = req.query['debug'] == 'loopback';
+  var isLoopback = req.query['debug'] === 'loopback';
+
   addClientToRoom(req, roomId, clientId, isLoopback, function(error, result) {
     if (error) {
       console.error('Error adding client to room: ' + error + ', room_state=' + result.room_state);
@@ -394,6 +400,7 @@ router.post('/message/:roomId/:clientId', function(req, res, next) {
   var roomId = req.params.roomId;
   var clientId = req.params.clientId;
   var message = req.body;
+
   saveMessageFromClient(req.headers.host, roomId, clientId, message, function(error, saved) {
     if (error) {
       res.send({ result: error });
@@ -410,7 +417,7 @@ router.post('/message/:roomId/:clientId', function(req, res, next) {
       console.log('Forwarding message to collider from room ' + roomId + ' client ' + clientId);
       var wssParams = getWSSParameters(req);
       var postOptions = {
-        host: 'apprtc-ws.webrtc.org',//wssParams.host,
+        host: wssParams.host,
         port: 443,
         path: '/' + roomId + '/' + clientId,
         method: 'POST'
@@ -447,7 +454,7 @@ router.get('/r/:roomId', function(req, res, next) {
     var params = getRoomParameters(req, roomId, null, null);
     // room_id/room_link will be included in the returned parameters
     // so the client will launch the requested room.
-    res.render('index_template', params);
+    res.render('index', params);
   });
 });
 
