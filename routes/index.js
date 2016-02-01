@@ -420,14 +420,17 @@ router.post('/message/:roomId/:clientId', function(req, res, next) {
       //  Note: loopback scenario follows this code path.
       //  TODO(tkchin): consider async fetch here.
       console.log('Forwarding message to collider from room ' + roomId + ' client ' + clientId);
+
       var wssParams = getWSSParameters(req);
+      var pair = wssParams.host.split(':');
       var postOptions = {
-        host: wssParams.host,
-        port: 443,
+        method: 'POST',
+        host: pair[0],
+        port: pair[1],
         path: '/' + roomId + '/' + clientId,
-        method: 'POST'
+        headers: {'Content-Type': 'text/plain; charset=utf-8'}
       };
-      var postRequest = https.request(postOptions, function(httpRes) {
+      var postRequest = (req.app.get('env') === 'development' ? http : https).request(postOptions, function(httpRes) {
         if (httpRes.statusCode == 200) {
           res.send({ result: constants.RESPONSE_SUCCESS });
         } else {
