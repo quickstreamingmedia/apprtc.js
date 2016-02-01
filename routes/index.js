@@ -21,6 +21,7 @@ var constants = {
 
   WSS_HOST_ACTIVE_HOST_KEY: 'wss_host_active_host', //memcache key for the active collider host.
   WSS_HOST_PORT_PAIRS: ['apprtc-ws.webrtc.org:443', 'apprtc-ws-2.webrtc.org:443'],
+  WSS_HOST_PORT_PAIRS_DEVEL: ['localhost:3001'],
 
   RESPONSE_ERROR: 'ERROR',
   RESPONSE_ROOM_FULL: 'FULL',
@@ -142,11 +143,15 @@ function getWSSParameters(req) {
     //  wssHostPortPair = wssActiveHost;
     //} else {
     //  console.warn('Invalid or no value returned from memcache, using fallback: '  + JSON.stringify(wssActiveHost));
+    if (req.app.get('env') === 'development') {
+      wssHostPortPair = constants.WSS_HOST_PORT_PAIRS_DEVEL[0];
+    } else {
       wssHostPortPair = constants.WSS_HOST_PORT_PAIRS[0];
+    }
     //}
   }
 
-  if (wssTLS && wssTLS === 'false') {
+  if (wssTLS && wssTLS === 'false' || !wssTLS && req.app.get('env') === 'development') {
     return {
       wssUrl: 'ws://' + wssHostPortPair + '/ws',
       wssPostUrl: 'http://' + wssHostPortPair,
