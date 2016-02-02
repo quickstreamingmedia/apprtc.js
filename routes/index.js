@@ -20,7 +20,9 @@ var constants = {
   CEOD_KEY: '4080218913',
 
   WSS_HOST_ACTIVE_HOST_KEY: 'wss_host_active_host', //memcache key for the active collider host.
-  WSS_HOST_PORT_PAIRS: ['apprtc-ws.webrtc.org:443', 'apprtc-ws-2.webrtc.org:443'],
+  WSS_HOST_USE_TLS_PROD: false,
+  WSS_HOST_PORT_PAIRS_PROD: ['collider.jrs.tv:80','collider-2.jrs.tv:80'],
+  WSS_HOST_USE_TLS_DEVEL: false,
   WSS_HOST_PORT_PAIRS_DEVEL: ['localhost:3001'],
 
   RESPONSE_ERROR: 'ERROR',
@@ -139,29 +141,42 @@ function getWSSParameters(req) {
     //TODO: setup memcache
     //var memcacheClient = memcache.Client();
     //var wssActiveHost = memcache_client.get(constants.WSS_HOST_ACTIVE_HOST_KEY);
-    //if (constants.WSS_HOST_PORT_PAIRS.indexOf(wssActiveHost) > -1) {
+    //if (constants.WSS_HOST_PORT_PAIRS_PROD.indexOf(wssActiveHost) > -1) {
     //  wssHostPortPair = wssActiveHost;
     //} else {
     //  console.warn('Invalid or no value returned from memcache, using fallback: '  + JSON.stringify(wssActiveHost));
     if (req.app.get('env') === 'development') {
       wssHostPortPair = constants.WSS_HOST_PORT_PAIRS_DEVEL[0];
     } else {
-      wssHostPortPair = constants.WSS_HOST_PORT_PAIRS[0];
+      wssHostPortPair = constants.WSS_HOST_PORT_PAIRS_PROD[0];
     }
     //}
   }
 
-  if (wssTLS && wssTLS === 'false' || !wssTLS && req.app.get('env') === 'development') {
+  if (wssTLS && wssTLS === 'false') {
+    wssTLS = false;
+
+  } else {
+    if (req.app.get('env') === 'development') {
+      wssTLS = constants.WSS_HOST_USE_TLS_DEVEL;
+    } else {
+      wssTLS = constants.WSS_HOST_USE_TLS_PROD;
+    }
+  }
+
+  if (!wssTLS) {
     return {
       wssUrl: 'ws://' + wssHostPortPair + '/ws',
       wssPostUrl: 'http://' + wssHostPortPair,
-      host: wssHostPortPair
+      host: wssHostPortPair,
+      wssTLS: false
     }
   } else {
     return {
       wssUrl: 'wss://' + wssHostPortPair + '/ws',
       wssPostUrl: 'https://' + wssHostPortPair,
-      host: wssHostPortPair
+      host: wssHostPortPair,
+      wssTLS: true
     }
   }
 }
@@ -430,7 +445,7 @@ router.post('/message/:roomId/:clientId', function(req, res, next) {
         path: '/' + roomId + '/' + clientId,
         headers: {'Content-Type': 'text/plain; charset=utf-8'}
       };
-      var postRequest = (req.app.get('env') === 'development' ? http : https).request(postOptions, function(httpRes) {
+      var postRequest = (wssParams.wssTLS ? https : http).request(postOptions, function(httpRes) {
         if (httpRes.statusCode == 200) {
           res.send({ result: constants.RESPONSE_SUCCESS });
         } else {
