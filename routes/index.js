@@ -21,7 +21,7 @@ var constants = {
 
   WSS_HOST_ACTIVE_HOST_KEY: 'wss_host_active_host', //memcache key for the active collider host.
   WSS_HOST_USE_TLS_PROD: false,
-  WSS_HOST_PORT_PAIRS_PROD: ['collider.jrs.tv:80','collider-2.jrs.tv:80'],
+  WSS_HOST_PORT_PAIRS_PROD: ['collider.jrs.tv', 'collider-2.jrs.tv'],
   WSS_HOST_USE_TLS_DEVEL: false,
   WSS_HOST_PORT_PAIRS_DEVEL: ['localhost:3001'],
 
@@ -441,10 +441,10 @@ router.post('/message/:roomId/:clientId', function(req, res, next) {
       var postOptions = {
         method: 'POST',
         host: pair[0],
-        port: pair[1],
         path: '/' + roomId + '/' + clientId,
         headers: {'Content-Type': 'text/plain; charset=utf-8'}
       };
+      if (pair[1]) postOptions.port = pair[1];
       var postRequest = (wssParams.wssTLS ? https : http).request(postOptions, function(httpRes) {
         if (httpRes.statusCode == 200) {
           res.send({ result: constants.RESPONSE_SUCCESS });
