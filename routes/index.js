@@ -54,7 +54,7 @@ function getHDDefault(userAgent) {
 // iceServers will be filled in by the TURN HTTP request.
 function makePCConfig(iceTransports) {
   var config = {
-    iceServers: [],
+    iceServers: [{ urls: "stun:stun.ideasip.com" }],
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
   };
