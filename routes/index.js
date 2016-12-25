@@ -166,14 +166,14 @@ function getWSSParameters(req) {
 
   if (!wssTLS) {
     return {
-      wssUrl: 'ws://' + wssHostPortPair + '/ws',
+      wssUrl: 'ws://' + wssHostPortPair + '/',
       wssPostUrl: 'http://' + wssHostPortPair,
       host: wssHostPortPair,
       wssTLS: false
     }
   } else {
     return {
-      wssUrl: 'wss://' + wssHostPortPair + '/ws',
+      wssUrl: 'wss://' + wssHostPortPair + '/',
       wssPostUrl: 'https://' + wssHostPortPair,
       host: wssHostPortPair,
       wssTLS: true
