@@ -20,10 +20,10 @@ var constants = {
   CEOD_KEY: '4080218913',
 
   WSS_HOST_ACTIVE_HOST_KEY: 'wss_host_active_host', //memcache key for the active collider host.
-  WSS_HOST_USE_TLS_PROD: false,
-  WSS_HOST_PORT_PAIRS_PROD: ['collider.jrs.tv', 'collider-2.jrs.tv'],
-  WSS_HOST_USE_TLS_DEVEL: false,
-  WSS_HOST_PORT_PAIRS_DEVEL: ['localhost:3001'],
+  WSS_HOST_USE_TLS_PROD: true,
+  WSS_HOST_PORT_PAIRS_PROD: ['echo.websocket.org', 'echo.websocket.org'],
+  WSS_HOST_USE_TLS_DEVEL: true,
+  WSS_HOST_PORT_PAIRS_DEVEL: ['echo.websocket.org'],
 
   RESPONSE_ERROR: 'ERROR',
   RESPONSE_ROOM_FULL: 'FULL',
